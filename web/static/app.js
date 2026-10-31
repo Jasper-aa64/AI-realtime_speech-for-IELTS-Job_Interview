@@ -843,7 +843,7 @@ window.addEventListener("resize", syncPracticeHeaderAnchor);
 
 function syncP1ModeHelp(helpEl, { isP1, isHigh, collapsed }) {
   const nextText = isInterviewView(state.view)
-    ? (isHigh ? (state.desktopCapabilities?.native_audio ? "实时语音，面试官随时追问" : "面试官随时追问") : "每题最多追问一次")
+    ? (isHigh ? (state.desktopCapabilities?.native_audio ? "实时语音，面试官随时追问" : "面试官随时追问") : "按题推进，不追问")
     : (isHigh ? "每题都会追问" : "原题节奏练习");
   window.clearTimeout(state.p1ModeHelpTimer);
   state.p1ModeHelpTimer = null;

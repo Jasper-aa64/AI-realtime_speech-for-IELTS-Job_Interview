@@ -65,20 +65,15 @@ class StudioEngineTests(TestCase):
         self.assertEqual(knowledge[0]["prompt"], "讲讲内存序。")
         self.assertNotIn("projects", [t["category"] for t in knowledge])
 
-    def test_standard_mode_allows_one_follow_up_per_question(self):
+    def test_standard_mode_never_follows_up(self):
         self.seed_resume()
         session = self.start(part="project", intensity="standard")
-        with patch(RUN, return_value=decision("follow_up", "为什么选无锁队列？", "strong")) as run:
-            after = self.answer(session)
-        self.assertEqual(run.call_args.args[1], "next_step")
-        self.assertEqual(after["current_turn"]["prompt"], "为什么选无锁队列？")
-        self.assertEqual(after["current_turn"]["kind"], "follow_up")
-        self.assertEqual(after["turns"][0]["decision"]["signal"], "strong")
         with patch(RUN) as run:
-            after = self.answer(after)
+            after = self.answer(session)
         run.assert_not_called()
-        self.assertEqual(after["turns"][1]["decision"]["reason"], "depth_limit")
+        self.assertEqual(after["turns"][0]["decision"]["reason"], "depth_limit")
         self.assertEqual(after["current_turn"]["prompt"], "介绍一下你的「行情回放」项目。")
+        self.assertEqual(after["current_turn"]["kind"], "main")
 
     def test_pressure_mode_follows_up_until_the_interviewer_moves_on(self):
         self.seed_resume()
@@ -96,7 +91,7 @@ class StudioEngineTests(TestCase):
 
     def test_ai_failure_moves_on_without_inventing_a_question(self):
         self.seed_resume()
-        session = self.start(part="project")
+        session = self.start(part="project", intensity="pressure")
         failure = InterviewError("AI generation failed", code="ai_generation_failed", status=502)
         with patch(RUN, side_effect=failure):
             after = self.answer(session)
@@ -132,10 +127,10 @@ class StudioEngineTests(TestCase):
 
     def test_save_answers_back_to_the_corpus(self):
         _, gateway, _ = self.seed_resume()
-        session = self.start(part="project")
+        session = self.start(part="project", intensity="pressure")
         with patch(RUN, return_value=decision("follow_up", "延迟怎么测的？")):
             session = self.answer(session, "我的网关讲述")
-        with patch(RUN):
+        with patch(RUN, return_value=decision("next")):
             session = self.answer(session, "用 HdrHistogram 统计")
         sid = session["session"]["id"]
         saved = self.post(f"/api/interview/sessions/{sid}/turns/{session['turns'][0]['id']}/save-corpus/").json()["entry"]

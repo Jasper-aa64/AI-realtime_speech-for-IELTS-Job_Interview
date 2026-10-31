@@ -30,10 +30,10 @@ REVERSE_OPEN = "我这边的问题差不多了，你有什么想问我的吗？"
 REVERSE_MORE = "还有其他想了解的吗？没有的话我们今天就到这里。"
 REVERSE_ROUNDS = 2
 FALLBACK_INTRO = "请先做一个简单的自我介绍。"
-# Follow-up depth per main question: standard keeps one; pressure digs until the limit shows.
-# 标准: one follow-up per question. 追问压力: the interviewer decides when a thread is done; this is only a safety stop
-# against an endless chain (never shown to the model).
-DEPTH = {"standard": {"default": 1}, "pressure": {"default": 8}}
+# Follow-up depth per main question.
+# 标准: no follow-ups, the planned questions in order. 追问压力: the interviewer decides when a thread is done; this is only
+# a safety stop against an endless chain (never shown to the model).
+DEPTH = {"standard": {"default": 0}, "pressure": {"default": 8}}
 AUDIO_LIMIT = 15 * 1024 * 1024
 # Launch-panel limits: a knowledge pool, questions written for one session, a project text, a JD, planned questions.
 PICK_LIMIT = 30

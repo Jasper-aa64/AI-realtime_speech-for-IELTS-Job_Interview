@@ -47400,7 +47400,7 @@ body:not(#_) .p3-mode-row.p3-pixel-flow.p3-pixel-flow-visible::after {
   transition: opacity 260ms ease, background 260ms ease !important;
 }
 
-/* 标准 / 追问 hint beside the switch (「每题最多追问一次」 / 「面试官会连续追问」): readable size and contrast */
+/* 标准 / 追问 hint beside the switch (「按题推进，不追问」 / 「面试官会连续追问」): readable size and contrast */
 body:not(#_):not(#__) #practicePanel .p1-mode-help {
   --p1-help-opacity: 1;
   font-size: 13px !important;
@@ -47476,7 +47476,7 @@ body:not(#_):not(#__):not(#___):not(#____) :is(#p3TopicPanel, #ivLaunch) .p3-mod
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5) !important;
 }
 
-/* the header hint (「每题最多追问一次」 / 「面试官会连续追问」) on a pill: a light tint in 标准, the dark pill on the 追问压力
+/* the header hint (「按题推进，不追问」 / 「面试官会连续追问」) on a pill: a light tint in 标准, the dark pill on the 追问压力
    flow; same box in both modes and its padding takes no layout space */
 body:not(#_):not(#__):not(#___) #practicePanel .exam-actions .p1-mode-help {
   padding: 3px 11px !important;
@@ -47953,7 +47953,8 @@ body:not(#_):not(#__):not(#___) #promptPane:has(> .iv-interviewer:not(.hidden)):
 .iv-interviewer .px-W { fill: var(--ivp-teeth); }
 .iv-interviewer .px-t { fill: var(--ivp-think); }
 /* listening: leans a pixel toward the answer side */
-.iv-interviewer[data-phase="listening"] .iv-iv-head { transform: translateX(1px); }
+.iv-interviewer[data-phase="listening"] .iv-iv-head { transform: translate(1px, 1px); } /* head turned a little toward the answer below right */
+.iv-interviewer[data-beat="1"] .iv-iv-head { transform: translateY(1px); } /* a small dip on a phrase's first syllable */
 /* strong answer: two nods */
 .iv-interviewer[data-reaction="nod"] .iv-iv-head { animation: ivNod 900ms steps(1, end) 1; }
 @keyframes ivNod { 0%, 50% { transform: translateY(0); } 25%, 75% { transform: translateY(2px); } }

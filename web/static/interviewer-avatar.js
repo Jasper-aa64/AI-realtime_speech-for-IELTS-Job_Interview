@@ -1,5 +1,5 @@
 (function () {
-  // 面试练习页左栏的像素面试官：念题时说话，回答时看向右边在听，等 AI 时眼睛往上在想；
+  // 面试练习页左栏的像素面试官：念题时说话，回答时看向右下（转写区）在听，等 AI 时眼睛往上在想；
   // 每题答完按面试官的判断反应一下（strong 点头 + 笑，adequate 淡淡一笑，weak 皱眉流汗）。
   // 只是表情，不影响流程。动作由 app.js 喂进来：setStatus(录音按钮的状态)、react(判断)、sync()（跟随页面显示/隐藏）。
   // 80×80 的像素格（由形状栅格化生成）：BASE 是不变的部分（"." 透明），OVER 是可切换的眼睛 / 嘴 / 眉毛 / 汗珠 / 思考点。
@@ -89,14 +89,17 @@
   const HEAD_ROWS = 46;
   const OVER = {
     "eyes-open": [[30, 29, "e"], [31, 29, "e"], [32, 29, "e"], [33, 29, "e"], [34, 29, "e"], [30, 30, "e"], [31, 30, "e"], [32, 30, "e"], [33, 30, "e"], [34, 30, "e"], [30, 28, "E"], [31, 28, "E"], [32, 28, "E"], [33, 28, "E"], [34, 28, "E"], [32, 29, "i"], [33, 29, "i"], [32, 30, "E"], [33, 30, "i"], [46, 29, "e"], [47, 29, "e"], [48, 29, "e"], [49, 29, "e"], [50, 29, "e"], [46, 30, "e"], [47, 30, "e"], [48, 30, "e"], [49, 30, "e"], [50, 30, "e"], [46, 28, "E"], [47, 28, "E"], [48, 28, "E"], [49, 28, "E"], [50, 28, "E"], [48, 29, "i"], [49, 29, "i"], [48, 30, "E"], [49, 30, "i"]],
-    "eyes-side": [[30, 29, "e"], [31, 29, "e"], [32, 29, "e"], [33, 29, "e"], [34, 29, "e"], [30, 30, "e"], [31, 30, "e"], [32, 30, "e"], [33, 30, "e"], [34, 30, "e"], [30, 28, "E"], [31, 28, "E"], [32, 28, "E"], [33, 28, "E"], [34, 28, "E"], [33, 29, "i"], [34, 29, "i"], [33, 30, "E"], [34, 30, "i"], [46, 29, "e"], [47, 29, "e"], [48, 29, "e"], [49, 29, "e"], [50, 29, "e"], [46, 30, "e"], [47, 30, "e"], [48, 30, "e"], [49, 30, "e"], [50, 30, "e"], [46, 28, "E"], [47, 28, "E"], [48, 28, "E"], [49, 28, "E"], [50, 28, "E"], [49, 29, "i"], [50, 29, "i"], [49, 30, "E"], [50, 30, "i"]],
     "eyes-up": [[30, 29, "e"], [31, 29, "e"], [32, 29, "e"], [33, 29, "e"], [34, 29, "e"], [30, 30, "e"], [31, 30, "e"], [32, 30, "e"], [33, 30, "e"], [34, 30, "e"], [30, 28, "E"], [31, 28, "E"], [32, 28, "E"], [33, 28, "E"], [34, 28, "E"], [32, 28, "i"], [33, 28, "i"], [32, 29, "E"], [33, 29, "i"], [46, 29, "e"], [47, 29, "e"], [48, 29, "e"], [49, 29, "e"], [50, 29, "e"], [46, 30, "e"], [47, 30, "e"], [48, 30, "e"], [49, 30, "e"], [50, 30, "e"], [46, 28, "E"], [47, 28, "E"], [48, 28, "E"], [49, 28, "E"], [50, 28, "E"], [48, 28, "i"], [49, 28, "i"], [48, 29, "E"], [49, 29, "i"]],
+    "eyes-downright": [[30, 28, "E"], [31, 28, "E"], [32, 28, "E"], [33, 28, "E"], [34, 28, "E"], [30, 30, "e"], [31, 30, "e"], [32, 30, "e"], [33, 30, "e"], [34, 30, "e"], [30, 29, "E"], [31, 29, "e"], [32, 29, "e"], [33, 29, "i"], [34, 29, "i"], [33, 30, "E"], [34, 30, "i"], [46, 28, "E"], [47, 28, "E"], [48, 28, "E"], [49, 28, "E"], [50, 28, "E"], [46, 30, "e"], [47, 30, "e"], [48, 30, "e"], [49, 30, "e"], [50, 30, "e"], [46, 29, "E"], [47, 29, "e"], [48, 29, "e"], [49, 29, "i"], [50, 29, "i"], [49, 30, "E"], [50, 30, "i"]],
     "eyes-blink": [[30, 29, "s"], [31, 29, "s"], [32, 29, "s"], [33, 29, "s"], [34, 29, "s"], [30, 30, "E"], [31, 30, "E"], [32, 30, "E"], [33, 30, "E"], [34, 30, "E"], [46, 29, "s"], [47, 29, "s"], [48, 29, "s"], [49, 29, "s"], [50, 29, "s"], [46, 30, "E"], [47, 30, "E"], [48, 30, "E"], [49, 30, "E"], [50, 30, "E"]],
     "mouth-closed": [[37, 40, "M"], [38, 40, "M"], [39, 40, "M"], [40, 40, "M"], [41, 40, "M"], [42, 40, "M"], [43, 40, "M"], [36, 39, "n"], [44, 39, "n"]],
     "mouth-mid": [[37, 40, "M"], [38, 40, "M"], [39, 40, "M"], [40, 40, "M"], [41, 40, "M"], [42, 40, "M"], [43, 40, "M"], [38, 41, "m"], [39, 41, "m"], [40, 41, "m"], [41, 41, "m"], [42, 41, "m"]],
     "mouth-open": [[37, 39, "M"], [38, 39, "M"], [39, 39, "M"], [40, 39, "M"], [41, 39, "M"], [42, 39, "M"], [43, 39, "M"], [37, 40, "m"], [38, 40, "m"], [39, 40, "m"], [40, 40, "m"], [41, 40, "m"], [42, 40, "m"], [43, 40, "m"], [37, 41, "m"], [38, 41, "m"], [39, 41, "m"], [40, 41, "m"], [41, 41, "m"], [42, 41, "m"], [43, 41, "m"], [38, 42, "M"], [39, 42, "M"], [40, 42, "M"], [41, 42, "M"], [42, 42, "M"], [38, 40, "W"], [39, 40, "W"], [40, 40, "W"], [41, 40, "W"], [42, 40, "W"]],
     "mouth-smile": [[35, 39, "M"], [45, 39, "M"], [36, 40, "M"], [37, 40, "M"], [38, 40, "M"], [39, 40, "M"], [40, 40, "M"], [41, 40, "M"], [42, 40, "M"], [43, 40, "M"], [44, 40, "M"], [38, 41, "M"], [39, 41, "M"], [40, 41, "M"], [41, 41, "M"], [42, 41, "M"], [29, 36, "b"], [30, 36, "b"], [31, 36, "b"], [49, 36, "b"], [50, 36, "b"], [51, 36, "b"]],
     "mouth-frown": [[37, 40, "M"], [38, 40, "M"], [39, 40, "M"], [40, 40, "M"], [41, 40, "M"], [42, 40, "M"], [43, 40, "M"], [36, 41, "M"], [44, 41, "M"]],
+    "mouth-wide": [[37, 39, "M"], [38, 39, "M"], [39, 39, "M"], [40, 39, "M"], [41, 39, "M"], [42, 39, "M"], [43, 39, "M"], [36, 40, "M"], [44, 40, "M"], [37, 40, "W"], [38, 40, "W"], [39, 40, "W"], [40, 40, "W"], [41, 40, "W"], [42, 40, "W"], [43, 40, "W"], [37, 41, "m"], [38, 41, "m"], [39, 41, "m"], [40, 41, "m"], [41, 41, "m"], [42, 41, "m"], [43, 41, "m"], [38, 42, "M"], [39, 42, "M"], [40, 42, "M"], [41, 42, "M"], [42, 42, "M"]],
+    "mouth-round": [[39, 39, "M"], [40, 39, "M"], [41, 39, "M"], [38, 40, "M"], [42, 40, "M"], [38, 41, "M"], [42, 41, "M"], [39, 40, "m"], [40, 40, "m"], [41, 40, "m"], [39, 41, "m"], [40, 41, "m"], [41, 41, "m"], [39, 42, "M"], [40, 42, "M"], [41, 42, "M"]],
+    "brows-raise": [[28, 23, "S"], [29, 23, "S"], [30, 23, "S"], [31, 23, "S"], [32, 23, "S"], [33, 23, "S"], [34, 23, "S"], [35, 23, "S"], [36, 23, "S"], [43, 23, "S"], [44, 23, "S"], [45, 23, "S"], [46, 23, "S"], [47, 23, "S"], [48, 23, "S"], [49, 23, "S"], [50, 23, "S"], [51, 23, "S"], [28, 22, "B"], [29, 22, "B"], [30, 22, "B"], [31, 22, "B"], [32, 22, "B"], [33, 22, "B"], [34, 22, "B"], [35, 22, "B"], [36, 22, "B"], [43, 22, "B"], [44, 22, "B"], [45, 22, "B"], [46, 22, "B"], [47, 22, "B"], [48, 22, "B"], [49, 22, "B"], [50, 22, "B"], [51, 22, "B"], [29, 21, "B"], [30, 21, "B"], [31, 21, "B"], [32, 21, "B"], [33, 21, "B"], [34, 21, "B"], [35, 21, "B"], [44, 21, "B"], [45, 21, "B"], [46, 21, "B"], [47, 21, "B"], [48, 21, "B"], [49, 21, "B"], [50, 21, "B"]],
     "brows-worry": [[28, 22, "S"], [29, 22, "S"], [30, 22, "S"], [31, 22, "S"], [32, 22, "S"], [33, 22, "S"], [34, 22, "S"], [35, 22, "S"], [36, 22, "S"], [28, 23, "S"], [29, 23, "S"], [30, 23, "S"], [31, 23, "S"], [32, 23, "S"], [33, 23, "S"], [34, 23, "S"], [35, 23, "S"], [36, 23, "S"], [43, 22, "S"], [44, 22, "S"], [45, 22, "S"], [46, 22, "S"], [47, 22, "S"], [48, 22, "S"], [49, 22, "S"], [50, 22, "S"], [51, 22, "S"], [43, 23, "S"], [44, 23, "S"], [45, 23, "S"], [46, 23, "S"], [47, 23, "S"], [48, 23, "S"], [49, 23, "S"], [50, 23, "S"], [51, 23, "S"], [28, 24, "B"], [29, 24, "B"], [30, 23, "B"], [31, 23, "B"], [32, 22, "B"], [33, 22, "B"], [34, 21, "B"], [35, 21, "B"], [36, 21, "B"], [51, 24, "B"], [50, 24, "B"], [49, 23, "B"], [48, 23, "B"], [47, 22, "B"], [46, 22, "B"], [45, 21, "B"], [44, 21, "B"], [43, 21, "B"]],
     "sweat": [[59, 17, "w"], [58, 18, "w"], [59, 18, "w"], [60, 18, "w"], [57, 19, "w"], [58, 19, "W"], [59, 19, "w"], [60, 19, "w"], [57, 20, "w"], [58, 20, "w"], [59, 20, "w"], [60, 20, "w"], [57, 21, "w"], [58, 21, "w"], [59, 21, "w"], [60, 21, "w"], [58, 22, "w"], [59, 22, "w"]],
     "think": [[62, 12, "t"], [63, 12, "t"], [62, 13, "t"], [63, 13, "t"], [67, 8, "t"], [68, 8, "t"], [67, 9, "t"], [68, 9, "t"], [72, 4, "t"], [73, 4, "t"], [72, 5, "t"], [73, 5, "t"]],
@@ -108,7 +111,8 @@
   };
   const REACTION_BY_SIGNAL = { strong: "nod", adequate: "smile", weak: "sweat" };
   const REACTION_MS = { nod: 2200, smile: 1600, sweat: 2600 };
-  const MOUTH_CYCLE = ["mid", "open", "mid", "closed"];
+  // 说话时一个“音节”一个嘴型，不连着重复；几个音节一句，句间合嘴停一下，句首偶尔挑眉、头轻轻一点
+  const TALK_SHAPES = ["mid", "open", "wide", "round", "mid", "open"];
 
   // 同色相邻的格子合成一条 rect，SVG 里元素少一些
   function rects(cells) {
@@ -155,6 +159,10 @@
     let reactionTimer = 0;
     let mouthTimer = 0;
     let blinkTimer = 0;
+    let brows = false;
+    let beat = false;
+    let seed = 7; // fixed-seed pseudo-random: an uneven rhythm that tests can replay
+    const rand = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
     const reducedMotion = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
 
     function node() {
@@ -173,8 +181,8 @@
       return el;
     }
 
-    // ---- 和右栏对齐（桌面宽度）：竖直中心对准录音大圆、比大圆大一些；题目从转写区的顶边开始。
-    // 题目太长放不下时题目往上让、人跟着缩小。参照物不在（P3 选题、窄屏）时交回 CSS 的默认位置。
+    // ---- 和右栏对齐（桌面宽度）：底边落在“人像竖直居中对准录音大圆”时的位置，从底边往上长到 PROMPT 标签下面；
+    // 题目从转写区的顶边开始。题目太长放不下时题目往上让、底边跟着上移。参照物不在（P3 选题、窄屏）时交回 CSS 的默认位置。
     let alignFrame = 0;
     function scheduleAlign() {
       if (alignFrame) return;
@@ -218,37 +226,59 @@
       const top = BASE.findIndex((row) => /[^.]/.test(row));
       const mid = (top + BASE.length) / 2 / BASE.length;
       const center = c.top + c.height / 2 - p.top;
-      const size = Math.max(96, Math.min(c.height * 1.15, (center - ceiling) / mid, (textTop - 10 - center) / (1 - mid)));
-      pane.style.setProperty("--iv-avatar-top", `${Math.round(center - size * mid)}px`);
+      const bottom = Math.min(center + c.height * 1.15 * (1 - mid), textTop - 10);
+      const reach = Math.min(top, ...OVER.think.map(([, y]) => y)) / BASE.length; // the 思考 dots must clear the label too
+      const size = Math.max(96, Math.min(c.height * 1.35, (bottom - ceiling) / (1 - reach)));
+      pane.style.setProperty("--iv-avatar-top", `${Math.round(bottom - size)}px`);
       pane.style.setProperty("--iv-avatar-size", `${Math.round(size)}px`);
       pane.style.setProperty("--iv-text-pad", `${Math.round(textTop - cardTop)}px`);
     }
 
     function paint() {
       if (!el) return;
-      const eyes = blink && phase !== "thinking" ? "blink" : ({ listening: "side", thinking: "up" }[phase] || "open");
+      const eyes = blink && phase !== "thinking" ? "blink" : ({ listening: "downright", thinking: "up" }[phase] || "open");
       let face = mouth;
       if (phase !== "speaking") face = reaction === "sweat" ? "frown" : (reaction === "nod" || reaction === "smile" ? "smile" : "closed");
       const on = new Set([`eyes-${eyes}`, `mouth-${face}`]);
       if (reaction === "sweat") { on.add("brows-worry"); on.add("sweat"); }
+      else if (brows && phase === "speaking") on.add("brows-raise");
       if (phase === "thinking") on.add("think");
       el.querySelectorAll(".iv-iv-layer").forEach((layer) => layer.classList.toggle("is-on", on.has(layer.dataset.layer)));
       el.dataset.phase = phase;
       el.dataset.reaction = reaction;
+      el.dataset.beat = beat && phase === "speaking" ? "1" : "";
     }
 
     function setMouthCycle(running) {
-      window.clearInterval(mouthTimer);
+      window.clearTimeout(mouthTimer);
       mouthTimer = 0;
       mouth = "closed";
+      brows = false;
+      beat = false;
       if (!running) return;
       if (reducedMotion()) { mouth = "mid"; return; }
-      let step = 0;
-      mouthTimer = window.setInterval(() => {
-        mouth = MOUTH_CYCLE[step % MOUTH_CYCLE.length];
-        step += 1;
+      let left = 0; // syllables left in this phrase
+      const step = () => {
+        if (left <= 0) { // between phrases: mouth shut for a breath; the next phrase may open with raised brows and a dip
+          left = 3 + Math.floor(rand() * 6);
+          mouth = "closed";
+          brows = rand() < 0.35;
+          beat = rand() < 0.5;
+          paint();
+          mouthTimer = window.setTimeout(step, 180 + rand() * 200);
+          return;
+        }
+        left -= 1;
+        let next = mouth;
+        while (next === mouth) next = TALK_SHAPES[Math.floor(rand() * TALK_SHAPES.length)];
+        mouth = next;
         paint();
-      }, 120);
+        beat = false;
+        if (left < 2) brows = false;
+        mouthTimer = window.setTimeout(step, 80 + rand() * 100);
+      };
+      left = 2 + Math.floor(rand() * 4);
+      step();
     }
 
     function scheduleBlink() {

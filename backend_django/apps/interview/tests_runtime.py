@@ -115,24 +115,16 @@ def decision(action="next", prompt="", signal="adequate"):
 class InterviewRuntimeDecisionTests(RuntimeTestBase):
     """After each answer the interviewer decides, inside complete_turn, what the next turn is."""
 
-    def test_standard_mode_follows_up_once_then_moves_on(self):
+    def test_standard_mode_moves_on_without_a_follow_up(self):
         self.seed_resume()
         attempt = self.begin({"mode": "iv_project"})
         first = attempt["turns"][0]
-        with patch(RUN, return_value=decision("follow_up", "为什么选无锁队列？", "strong")) as run:
-            done = self.complete(attempt["id"], first["id"])
-        self.assertEqual(run.call_args.args[1], "next_step")
-        follow = done["next_turn"]
-        self.assertEqual(follow["prompt"]["role"], "follow_up")
-        self.assertEqual(follow["question"], "为什么选无锁队列？")
-        self.assertEqual(follow["prompt"]["parent_turn_id"], first["id"])
-        self.assertEqual(follow["timers"]["speak_seconds"], 90)
-        self.assertEqual(follow["prompt"]["language"], "zh")
         with patch(RUN) as run:
-            done = self.complete(attempt["id"], follow["id"])
+            done = self.complete(attempt["id"], first["id"])
         run.assert_not_called()
+        self.assertEqual(done["next_turn"]["prompt"]["role"], "main")
         self.assertEqual(done["next_turn"]["question"], "介绍一下你的「行情回放」项目。")
-        saved = SpeakingTurn.objects.get(attempt__attempt_id=attempt["id"], turn_id=follow["id"])
+        saved = SpeakingTurn.objects.get(attempt__attempt_id=attempt["id"], turn_id=first["id"])
         self.assertEqual(saved.metadata["decision"]["reason"], "depth_limit")
 
     def test_pressure_mode_lets_the_interviewer_decide_when_a_thread_is_done(self):
@@ -175,7 +167,7 @@ class InterviewRuntimeDecisionTests(RuntimeTestBase):
         self.assertEqual(standard["signal"], "adequate")
 
     def test_answer_response_carries_the_interviewer_signal(self):
-        attempt = self.begin({"mode": "iv_knowledge", "count": 2})
+        attempt = self.begin({"mode": "iv_knowledge", "count": 2, "iv_intensity": "pressure"})
         with patch(RUN, return_value=decision("next", signal="strong")):
             done = self.complete(attempt["id"], attempt["turns"][0]["id"])
         self.assertEqual(done["interview_signal"], "strong")
@@ -203,7 +195,7 @@ class InterviewRuntimeDecisionTests(RuntimeTestBase):
     def test_ai_failure_moves_on(self):
         from .validation import InterviewError
 
-        attempt = self.begin({"mode": "iv_knowledge", "count": 2})
+        attempt = self.begin({"mode": "iv_knowledge", "count": 2, "iv_intensity": "pressure"})
         with patch(RUN, side_effect=InterviewError("AI 服务失败", code="ai_generation_failed", status=502)):
             done = self.complete(attempt["id"], attempt["turns"][0]["id"])
         self.assertEqual(done["next_turn"]["id"], attempt["turns"][1]["id"])
@@ -336,7 +328,7 @@ class InterviewLaunchOptionTests(RuntimeTestBase):
 
     def test_project_round_from_a_written_description_needs_no_resume(self):
         text = "## 撮合网关\n用无锁队列把下单延迟从 80us 降到 12us。"
-        payload = self.begin({"mode": "iv_project", "project_text": text})
+        payload = self.begin({"mode": "iv_project", "project_text": text, "iv_intensity": "pressure"})
         self.assertEqual(len(payload["turns"]), 1)
         turn = payload["turns"][0]
         self.assertEqual(turn["prompt"]["stage"], "project")

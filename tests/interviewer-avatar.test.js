@@ -81,17 +81,33 @@ test("it sits under the PROMPT label and shows only on practice pages (interview
   assert.equal(env.avatar().classes.has("hidden"), true);
 });
 
-test("he talks while the question plays, looks at the answer side while you answer, and thinks while the AI works", () => {
+test("he talks while the question plays, looks down right at the answer while you answer, and thinks while the AI works", () => {
   const env = harness();
   env.api.sync();
   env.api.setStatus("examiner_playing");
   assert.equal(env.avatar().dataset.phase, "speaking");
-  const mouths = new Set();
-  for (let i = 0; i < 4; i += 1) { env.fire(120); mouths.add([...env.on()].find((n) => n.startsWith("mouth-"))); }
-  assert.deepEqual([...mouths].sort(), ["mouth-closed", "mouth-mid", "mouth-open"]);
+  // syllables of uneven length, never the same shape twice in a row, and a closed-mouth breath between phrases
+  const mouths = [];
+  const seen = new Set();
+  let browsUp = false;
+  for (let t = 0; t < 4000; t += 20) {
+    env.fire(20);
+    const mouth = [...env.on()].find((n) => n.startsWith("mouth-"));
+    if (mouth !== mouths[mouths.length - 1]) mouths.push(mouth);
+    seen.add(mouth);
+    browsUp ||= env.on().has("brows-raise");
+  }
+  assert.deepEqual([...seen].sort(), ["mouth-closed", "mouth-mid", "mouth-open", "mouth-round", "mouth-wide"]);
+  assert.ok(mouths.length > 20);
+  assert.ok(browsUp);
+  const talk = [...env.timers.values()].map((t) => t.ms).filter((ms) => ms < 2600); // the rest is the next blink
+  assert.equal(talk.length, 1);
+  assert.ok(talk[0] >= 80 && talk[0] <= 380, String(talk[0]));
   env.api.setStatus("recording");
   assert.equal(env.avatar().dataset.phase, "listening");
-  assert.ok(env.on().has("eyes-side"));
+  assert.equal(env.avatar().dataset.beat, "");
+  assert.ok(env.on().has("eyes-downright"));
+  assert.equal(env.on().has("brows-raise"), false);
   assert.ok(env.on().has("mouth-closed"));
   env.api.setStatus("processing");
   assert.ok(env.on().has("eyes-up"));
