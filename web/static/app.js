@@ -26,7 +26,8 @@ const state = {
   transcriptInterim: "",
   transcriptStatus: "missing",
   transcriptSource: "browser_dictation",
-  captionTurnId: "", // the turn whose recording the desktop shell is captioning
+  captionTurnId: "",
+  promptTurnId: "", // the turn whose question is on the prompt card (the interviewer appears with it) // the turn whose recording the desktop shell is captioning
   dictationFinalWait: null,
   browserTtsUtterance: null,
   activeHistoryId: null,
@@ -1347,8 +1348,9 @@ const viewRouter = window.IELTSViewRouter?.createViewRouter?.({ state, viewCopy 
 // Interview and IELTS practice alike; it lines up with the record circle and starts the question where the transcript starts.
 window.IELTSInterviewer?.create?.({
   host: () => $("promptPane"),
-  active: () => isPracticeView(state.view) && !!state.practiceLocked, // before Start the prompt shows only its intro line
-  anchors: () => ({ circle: $("recordControl"), text: $("ivVoicePanel")?.classList.contains("hidden") === false ? $("ivVoicePanel") : $("#recorderPane .recorder-status-zone") }),
+  // before Start the prompt shows only its intro line; he comes in with the first question (P2: its cue card), already in place
+  active: () => isPracticeView(state.view) && !!state.practiceLocked && !!state.promptTurnId,
+  anchors: () => ({ session: state.practiceSessionId, circle: $("recordControl"), text: $("ivVoicePanel")?.classList.contains("hidden") === false ? $("ivVoicePanel") : $("#recorderPane .recorder-status-zone") }),
 });
 if (!viewRouter) {
   throw new Error("IELTSViewRouter module failed to initialize.");
@@ -3173,6 +3175,7 @@ function resetPracticeSurface() {
   text("timerValue", "00:00");
   $("#phaseMeter").style.width = "0%";
   text("promptKicker", "Prompt");
+  state.promptTurnId = "";
   setPromptHtml("Start a voice practice session to load a question.", "short");
   interview?.renderLaunch?.(state.view);
   text("followUp", "");
@@ -3288,6 +3291,7 @@ function setPromptHtml(html, size = "medium") {
   $("#ivLaunch")?.classList.add("hidden");
   $("#promptPane")?.classList.remove("has-iv-launch");
   if (mascot) card.appendChild(mascot);
+  window.IELTSInterviewer?.sync?.();
 }
 
 function promptSize(question) {
@@ -3682,6 +3686,7 @@ function renderTurn(turn) {
       activePlayer: examinerPlayerSnapshot(state.activeExaminerAudioPlayer),
     });
   }
+  state.promptTurnId = turn.id || "turn";
   const isP2 = turn.part === "p2";
   const isFollowUp = turn.prompt?.role === "follow_up";
   const isIntro = turn.counts_toward_total === false;
@@ -14567,6 +14572,7 @@ function stopAllRuntime(label = "Ready") {
   if (summaryPanel) summaryPanel.innerHTML = "";
   $("exitPractice")?.classList.add("hidden");
   text("promptKicker", "Prompt");
+  state.promptTurnId = "";
   setPromptHtml("Start a voice practice session to load a question.", "short");
   interview?.renderLaunch?.(state.view);
   text("followUp", "");
